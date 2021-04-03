@@ -1,5 +1,7 @@
 class CartsController < ApplicationController
-before_action :authenticate_user!
+    validates :product_id, presence: true
+    validates :quantity, presence: true
+    before_action :authenticate_user!
 
     def update
         product = params[:cart][:product_id]
@@ -14,31 +16,15 @@ before_action :authenticate_user!
 
     def pay_with_paypal
         @order = Order.find(params[:cart][:order_id])
-        #price must be in cents
-        price = order.total * 100
-        
-        response = EXPRESS_GATEWAY.setup_purchase(price,
-        ip: request.remote_ip,
-        return_url: process_paypal_payment_cart_url,
-        cancel_return_url: root_url,
-        allow_guest_checkout: true,
-        currency: "USD"
-        )
-        
-        process_paypal_payment
+        @order.purchase_setup
+        @order.process_payment
     end
 
-    def choose_payment_method
-        payment_method = PaymentMethod.find_by(code: "PEC")
-        
-        Payment.create(
-        order_id: order.id,
-        payment_method_id: payment_method.id,
-        state: "processing",
-        total: order.total,
-        token: response.token
-        )
-        redirect_to EXPRESS_GATEWAY.redirect_url_for(response.token)
+    def process_paypal_payment
+        @order = Order.find(params[:cart][:order_id])
+        @order.purchase
+        @order.status 
+        redirect_to root_url, notice: "Payment completed"
     end
 
     private
